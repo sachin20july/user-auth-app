@@ -4,7 +4,7 @@ export default function Home() {
       <div className="text-center">
         <h1 className="text-4xl font-bold">User Authentication Application</h1>
 
-        <p className="mt-4 text-gray-600">Welcome to our application</p>
+        <p className="mt-4 text-gray-600">Welcome to our app</p>
 
         <div className="mt-6 flex justify-center gap-4">
           <a href="/login" className="rounded-md bg-black px-5 py-2 text-white">
