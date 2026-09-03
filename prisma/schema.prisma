@@ -1,4 +1,4 @@
-
+import { PrismaClient } from "@/generated/prisma";
 
 generator client {
   //provider = "prisma-client-js"
