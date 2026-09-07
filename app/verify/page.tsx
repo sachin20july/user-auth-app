@@ -1,9 +1,17 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 export default function VerifyOtpPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <VerifyOtpForm />
+    </Suspense>
+  );
+}
+
+function VerifyOtpForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
