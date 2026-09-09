@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
-
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const { email, password } = body;
+    const { email, password, turnstileToken } = body;
 
-    // Validate required fields
     if (!email || !password) {
       return NextResponse.json(
         {
@@ -21,9 +19,47 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!turnstileToken) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Please complete the CAPTCHA",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Verify Turnstile token with Cloudflare
+    const turnstileResponse = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          secret: process.env.TURNSTILE_SECRET_KEY || "",
+          response: turnstileToken,
+        }),
+      },
+    );
+
+    const turnstileResult = await turnstileResponse.json();
+
+    console.log("Turnstile verification:", turnstileResult.success);
+
+    if (!turnstileResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "CAPTCHA verification failed",
+        },
+        { status: 403 },
+      );
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Find user
     const user = await prisma.user.findUnique({
       where: {
         email: normalizedEmail,
@@ -40,7 +76,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check whether email has been verified
     if (!user.emailVerified) {
       return NextResponse.json(
         {
@@ -51,7 +86,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Make sure the user has a password
     if (!user.passwordHash) {
       return NextResponse.json(
         {
@@ -62,7 +96,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Compare password with stored hash
     const passwordMatches = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatches) {
@@ -75,13 +108,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Login successful for now.
-    // Create a secure session token
     const token = randomBytes(32).toString("hex");
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    // Save session in database
     await prisma.session.create({
       data: {
         userId: user.id,
@@ -90,7 +120,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Store session token in an HTTP-only cookie
     const response = NextResponse.json({
       success: true,
       message: "Login successful",

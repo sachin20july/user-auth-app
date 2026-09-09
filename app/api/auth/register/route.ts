@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { randomBytes, createHash } from "crypto";
 import bcrypt from "bcryptjs";
+
 import { prisma } from "@/lib/prisma";
-import { sendOtpEmail } from "@/lib/email";
+import { sendActivationEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
@@ -9,7 +11,6 @@ export async function POST(request: Request) {
 
     const { name, email, password } = body;
 
-    // Validate required fields
     if (!name || !email || !password) {
       return NextResponse.json(
         {
@@ -22,7 +23,10 @@ export async function POST(request: Request) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check whether the user already exists
+    // --------------------------------------------------
+    // 1. Check if a verified account already exists
+    // --------------------------------------------------
+
     const existingUser = await prisma.user.findUnique({
       where: {
         email: normalizedEmail,
@@ -39,20 +43,37 @@ export async function POST(request: Request) {
       );
     }
 
-    // Hash the password
-    const passwordHash = await bcrypt.hash(password, 12);
+    // --------------------------------------------------
+    // 2. Check for an existing pending registration
+    // --------------------------------------------------
 
-    // Registration data and OTP are valid for 10 minutes
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    // Remove any previous pending registration
-    await prisma.registration.deleteMany({
+    const existingRegistration = await prisma.registration.findUnique({
       where: {
         email: normalizedEmail,
       },
     });
 
-    // Save pending registration
+    if (existingRegistration) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Verification email already sent. Please check your email and verify your account.",
+          data: { email: normalizedEmail },
+          pendingVerification: true,
+        },
+        { status: 409 },
+      );
+    }
+
+    // --------------------------------------------------
+    // 3. Create new pending registration
+    // --------------------------------------------------
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     await prisma.registration.create({
       data: {
         email: normalizedEmail,
@@ -62,39 +83,53 @@ export async function POST(request: Request) {
       },
     });
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // --------------------------------------------------
+    // 4. Generate secure activation token
+    // --------------------------------------------------
 
-    // Hash OTP before storing it
-    const otpHash = await bcrypt.hash(otp, 10);
+    const token = randomBytes(32).toString("hex");
 
-    // Remove previous registration OTP
-    await prisma.emailOtp.deleteMany({
+    // Store only the hash in database
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+
+    // --------------------------------------------------
+    // 5. Remove previous activation token
+    // --------------------------------------------------
+
+    await prisma.emailToken.deleteMany({
       where: {
         email: normalizedEmail,
-        purpose: "REGISTER",
+        purpose: "ACTIVATE_ACCOUNT",
       },
     });
 
-    // Save hashed OTP
-    await prisma.emailOtp.create({
+    // --------------------------------------------------
+    // 6. Store new activation token hash
+    // --------------------------------------------------
+
+    await prisma.emailToken.create({
       data: {
         email: normalizedEmail,
-        otpHash,
+        tokenHash,
         expiresAt,
-        attempts: 0,
-        purpose: "REGISTER",
+        purpose: "ACTIVATE_ACCOUNT",
       },
     });
 
-    // Send OTP
-    // Currently prints OTP to the server console.
-    // Later this function will send a real email.
-    await sendOtpEmail(normalizedEmail, otp);
+    // --------------------------------------------------
+    // 7. Send activation email
+    // --------------------------------------------------
+
+    await sendActivationEmail(normalizedEmail, token);
+
+    // --------------------------------------------------
+    // 8. Return success
+    // --------------------------------------------------
 
     return NextResponse.json({
       success: true,
-      message: "OTP sent successfully",
+      message:
+        "Activation link sent successfully. Please check your email to verify your account.",
       data: {
         email: normalizedEmail,
       },

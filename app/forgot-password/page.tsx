@@ -34,11 +34,12 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      router.push(
-        `/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`,
+      setMessage(
+        "Password reset link has been emailed to you. Please check your inbox.",
       );
     } catch (error) {
       console.error("Forgot password error:", error);
+
       setMessage("Something went wrong");
     } finally {
       setLoading(false);
@@ -51,7 +52,8 @@ export default function ForgotPasswordPage() {
         <h1 className="mb-2 text-2xl font-bold">Forgot Password</h1>
 
         <p className="mb-6 text-sm text-gray-600">
-          Enter your registered email address and we will send you an OTP.
+          Enter your registered email address and we will send you a password
+          reset link.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -74,9 +76,9 @@ export default function ForgotPasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg border border-black-600 bg-blue-400 px-4 py-2 text-black transition duration-200 hover:bg-blue-800 hover:text-white hover:shadow-lg"
+            className="w-full rounded-lg border border-black bg-blue-400 px-4 py-2 text-black transition duration-200 hover:bg-blue-800 hover:text-white hover:shadow-lg"
           >
-            {loading ? "Sending OTP..." : "Send OTP"}
+            {loading ? "Sending Link..." : "Send Reset Link"}
           </button>
         </form>
 

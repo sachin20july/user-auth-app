@@ -1,23 +1,22 @@
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, otp, password } = body;
+    const { token, password } = body;
 
-    if (!email || !otp || !password) {
+    if (!token || !password) {
       return NextResponse.json(
         {
           success: false,
-          message: "Email, OTP and password are required",
+          message: "Reset token and password are required",
         },
         { status: 400 },
       );
     }
-
-    const normalizedEmail = email.trim().toLowerCase();
 
     if (password.length < 6) {
       return NextResponse.json(
@@ -29,72 +28,81 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await prisma.user.findUnique({
+    // Hash the token received from the reset link
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+
+    // Find the reset token
+    const emailToken = await prisma.emailToken.findUnique({
       where: {
-        email: normalizedEmail,
+        tokenHash,
       },
     });
 
-    if (!user) {
+    if (!emailToken) {
       return NextResponse.json(
         {
           success: false,
-          message: "User not found",
+          message: "Invalid or expired reset link",
         },
-        { status: 404 },
+        { status: 400 },
       );
     }
 
-    const otpRecord = await prisma.emailOtp.findFirst({
-      where: {
-        email: normalizedEmail,
-        purpose: "RESET_PASSWORD",
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    if (!otpRecord) {
+    // Make sure this token is for password reset
+    if (emailToken.purpose !== "RESET_PASSWORD") {
       return NextResponse.json(
         {
           success: false,
-          message: "OTP not found",
+          message: "Invalid reset link",
         },
-        { status: 404 },
+        { status: 400 },
       );
     }
 
-    if (otpRecord.expiresAt < new Date()) {
-      await prisma.emailOtp.delete({
+    // Check expiration
+    if (emailToken.expiresAt < new Date()) {
+      await prisma.emailToken.delete({
         where: {
-          id: otpRecord.id,
+          id: emailToken.id,
         },
       });
 
       return NextResponse.json(
         {
           success: false,
-          message: "OTP has expired",
+          message: "Reset link has expired",
         },
         { status: 400 },
       );
     }
 
-    const isValidOtp = await bcrypt.compare(otp.toString(), otpRecord.otpHash);
+    // Find the user
+    const user = await prisma.user.findUnique({
+      where: {
+        email: emailToken.email,
+      },
+    });
 
-    if (!isValidOtp) {
+    if (!user) {
+      await prisma.emailToken.delete({
+        where: {
+          id: emailToken.id,
+        },
+      });
+
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid OTP",
+          message: "User account not found",
         },
-        { status: 400 },
+        { status: 404 },
       );
     }
 
+    // Hash the new password
     const passwordHash = await bcrypt.hash(password, 12);
 
+    // Update password
     await prisma.user.update({
       where: {
         id: user.id,
@@ -104,15 +112,17 @@ export async function POST(request: Request) {
       },
     });
 
+    // Invalidate all existing sessions
     await prisma.session.deleteMany({
       where: {
         userId: user.id,
       },
     });
 
-    await prisma.emailOtp.delete({
+    // Delete the used reset token
+    await prisma.emailToken.delete({
       where: {
-        id: otpRecord.id,
+        id: emailToken.id,
       },
     });
 

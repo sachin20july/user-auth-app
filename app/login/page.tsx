@@ -1,10 +1,14 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Turnstile } from "@marsidev/react-turnstile";
 
 export default function LoginPage() {
   const router = useRouter();
+
+  const [turnstileToken, setTurnstileToken] = useState("");
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -16,6 +20,11 @@ export default function LoginPage() {
     console.log("Login form submitted");
     console.log("Email:", email);
 
+    if (!turnstileToken) {
+      alert("Please complete the CAPTCHA");
+      return;
+    }
+
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -25,6 +34,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           email,
           password,
+          turnstileToken,
         }),
       });
 
@@ -78,6 +88,21 @@ export default function LoginPage() {
               type="password"
               required
               className="w-full rounded-lg border px-3 py-2"
+            />
+          </div>
+
+          <div className="flex justify-center">
+            <Turnstile
+              siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+              onSuccess={(token) => {
+                setTurnstileToken(token);
+              }}
+              onExpire={() => {
+                setTurnstileToken("");
+              }}
+              onError={() => {
+                setTurnstileToken("");
+              }}
             />
           </div>
 

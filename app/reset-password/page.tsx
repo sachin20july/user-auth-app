@@ -1,34 +1,27 @@
 "use client";
 
 import { FormEvent, Suspense, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 
-export default function ResetPasswordPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <ResetPasswordForm />
-    </Suspense>
-  );
-}
+import { useSearchParams, useRouter } from "next/navigation";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const email = searchParams.get("email") || "";
+  const token = searchParams.get("token") || "";
 
-  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setMessage("");
 
-    if (!otp) {
-      setMessage("Please enter the OTP");
+    if (!token) {
+      setMessage("Invalid or missing reset link.");
       return;
     }
 
@@ -42,6 +35,8 @@ function ResetPasswordForm() {
       return;
     }
 
+    setLoading(true);
+
     try {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
@@ -49,8 +44,7 @@ function ResetPasswordForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email,
-          otp,
+          token,
           password,
         }),
       });
@@ -71,40 +65,19 @@ function ResetPasswordForm() {
       }, 1500);
     } catch (error) {
       console.error("Reset password error:", error);
+
       setMessage("Something went wrong");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md rounded-xl border p-8 shadow">
-        <h1 className="mb-2 text-2xl font-bold">Reset Password</h1>
-
-        <p className="mb-2 text-sm text-gray-600">Enter the OTP sent to:</p>
-
-        <p className="mb-6 font-medium">{email}</p>
+        <h1 className="mb-6 text-2xl font-bold">Reset Password</h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="otp" className="mb-1 block text-sm font-medium">
-              OTP
-            </label>
-
-            <input
-              id="otp"
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              required
-              value={otp}
-              onChange={(event) =>
-                setOtp(event.target.value.replace(/\D/g, ""))
-              }
-              placeholder="Enter 6-digit OTP"
-              className="w-full rounded-lg border px-3 py-2"
-            />
-          </div>
-
           <div>
             <label
               htmlFor="password"
@@ -145,9 +118,10 @@ function ResetPasswordForm() {
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-black px-4 py-2 text-white"
+            disabled={loading}
+            className="w-full rounded-lg bg-black px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Reset Password
+            {loading ? "Resetting..." : "Reset Password"}
           </button>
         </form>
 
@@ -164,5 +138,13 @@ function ResetPasswordForm() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
+import { randomBytes, createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { sendOtpEmail } from "@/lib/email";
+import { sendPasswordResetEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
@@ -46,40 +46,39 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate a 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate secure random reset token
+    const token = randomBytes(32).toString("hex");
 
-    // Hash the OTP before storing it
-    const otpHash = await bcrypt.hash(otp, 10);
+    // Store only the hash of the token
+    const tokenHash = createHash("sha256").update(token).digest("hex");
 
-    // OTP valid for 10 minutes
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    // Reset link will be valid for 30 minutes
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
-    // Remove previous password-reset OTPs
-    await prisma.emailOtp.deleteMany({
+    // Remove previous reset tokens for this email
+    await prisma.emailToken.deleteMany({
       where: {
         email: normalizedEmail,
         purpose: "RESET_PASSWORD",
       },
     });
 
-    // Store new OTP
-    await prisma.emailOtp.create({
+    // Store reset token hash
+    await prisma.emailToken.create({
       data: {
         email: normalizedEmail,
-        otpHash,
+        tokenHash,
         expiresAt,
-        attempts: 0,
         purpose: "RESET_PASSWORD",
       },
     });
 
-    // Send OTP
-    await sendOtpEmail(normalizedEmail, otp);
+    // Send password reset link
+    await sendPasswordResetEmail(normalizedEmail, token);
 
     return NextResponse.json({
       success: true,
-      message: "OTP sent successfully",
+      message: "Password reset link sent successfully",
       data: {
         email: normalizedEmail,
       },
