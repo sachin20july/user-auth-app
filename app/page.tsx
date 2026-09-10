@@ -9,7 +9,7 @@ export default function Home() {
         <div className="mt-6 flex justify-center gap-4">
           <a
             href="/login"
-            className="w-full rounded-lg border border-green-800 bg-transparent px-4 py-2 text-black transition duration-200 hover:bg-green-800 hover:text-white hover:shadow-lg"
+            className="w-full rounded-lg border border-green-800 bg-white px-4 py-2 text-black transition duration-200 hover:bg-green-800 hover:text-white hover:shadow-lg"
           >
             Login
           </a>
