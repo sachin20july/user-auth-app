@@ -12,6 +12,8 @@
     "@marsidev/react-turnstile": "^1.6.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.4",
     "bcryptjs": "^3.0.3",
     "next": "16.3.4",
     "nodemailer": "^10.0.1",

@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
             disabled={loading}
             className="w-full rounded-lg border border-black bg-blue-400 px-4 py-2 text-black transition duration-200 hover:bg-blue-800 hover:text-white hover:shadow-lg"
           >
-            {loading ? "Sending Link..." : "Send Reset Link"}
+            {loading ? "Sending Link..." : "Send Password Reset Link"}
           </button>
         </form>
 

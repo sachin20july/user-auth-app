@@ -2,9 +2,41 @@ import { NextResponse } from "next/server";
 import { randomBytes, createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendPasswordResetEmail } from "@/lib/email";
+import {
+  forgotPasswordIpRateLimit,
+  forgotPasswordEmailRateLimit,
+} from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    // Get client IP address
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const ip =
+      forwardedFor?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    // Rate limit by IP address
+    const ipLimit = await forgotPasswordIpRateLimit.limit(ip);
+
+    if (!ipLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Too many password reset attempts from this IP address. Please try again later.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(
+              Math.max(1, Math.ceil((ipLimit.reset - Date.now()) / 1000)),
+            ),
+          },
+        },
+      );
+    }
+
     const body = await request.json();
     const { email } = body;
 
@@ -20,30 +52,41 @@ export async function POST(request: Request) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    // Rate limit by email address
+    const emailLimit =
+      await forgotPasswordEmailRateLimit.limit(normalizedEmail);
+
+    if (!emailLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Too many password reset attempts for this email address. Please try again later.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(
+              Math.max(1, Math.ceil((emailLimit.reset - Date.now()) / 1000)),
+            ),
+          },
+        },
+      );
+    }
+
     const user = await prisma.user.findUnique({
       where: {
         email: normalizedEmail,
       },
     });
 
-    if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "No account found with this email",
-        },
-        { status: 404 },
-      );
-    }
-
-    if (!user.emailVerified) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Please verify your email first",
-        },
-        { status: 403 },
-      );
+    // Do not reveal whether an account exists.
+    if (!user || !user.emailVerified) {
+      return NextResponse.json({
+        success: true,
+        message:
+          "If an account exists with this email, a password reset link has been sent.",
+      });
     }
 
     // Generate secure random reset token
@@ -78,10 +121,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Password reset link sent successfully",
-      data: {
-        email: normalizedEmail,
-      },
+      message:
+        "If an account exists with this email, a password reset link has been sent.",
     });
   } catch (error) {
     console.error("Forgot password API error:", error);

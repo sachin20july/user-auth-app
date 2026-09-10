@@ -4,16 +4,19 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Turnstile } from "@marsidev/react-turnstile";
 
+import { NextResponse } from "next/server";
+import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+
 export default function LoginPage() {
   const router = useRouter();
-
   const [turnstileToken, setTurnstileToken] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-
     const email = formData.get("email");
     const password = formData.get("password");
 
@@ -55,7 +58,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
+    <main className="flex min-h-screen m-10 items-center justify-center px-4">
       <div className="w-full max-w-md rounded-xl border p-8 shadow">
         <h1 className="mb-6 text-2xl font-bold">Login</h1>
 

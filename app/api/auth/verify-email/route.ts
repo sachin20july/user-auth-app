@@ -1,9 +1,36 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { verifyEmailIpRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const forwardedFor = request.headers.get("x-forwarded-for");
+
+    const ip =
+      forwardedFor?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    const ipLimit = await verifyEmailIpRateLimit.limit(ip);
+
+    if (!ipLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Too many verification attempts from this IP address. Please try again later.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(
+              Math.max(1, Math.ceil((ipLimit.reset - Date.now()) / 1000)),
+            ),
+          },
+        },
+      );
+    }
     const body = await request.json();
     const { token } = body;
 

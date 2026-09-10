@@ -2,9 +2,36 @@ import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { resetPasswordIpRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const ip =
+      forwardedFor?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    const ipLimit = await resetPasswordIpRateLimit.limit(ip);
+
+    if (!ipLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Too many password reset attempts from this IP address. Please try again later.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(
+              Math.max(1, Math.ceil((ipLimit.reset - Date.now()) / 1000)),
+            ),
+          },
+        },
+      );
+    }
+
     const body = await request.json();
     const { token, password } = body;
 
@@ -102,29 +129,30 @@ export async function POST(request: Request) {
     // Hash the new password
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Update password
-    await prisma.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        passwordHash,
-      },
-    });
+    // Update password, invalidate all sessions,
+    // and consume the reset token atomically.
+    await prisma.$transaction([
+      prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          passwordHash,
+        },
+      }),
 
-    // Invalidate all existing sessions
-    await prisma.session.deleteMany({
-      where: {
-        userId: user.id,
-      },
-    });
+      prisma.session.deleteMany({
+        where: {
+          userId: user.id,
+        },
+      }),
 
-    // Delete the used reset token
-    await prisma.emailToken.delete({
-      where: {
-        id: emailToken.id,
-      },
-    });
+      prisma.emailToken.delete({
+        where: {
+          id: emailToken.id,
+        },
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,

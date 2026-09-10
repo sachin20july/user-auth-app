@@ -1,41 +1,84 @@
-type RateLimitEntry = {
-  count: number;
-  resetAt: number;
-};
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
-const requests = new Map<string, RateLimitEntry>();
+const redis = Redis.fromEnv();
 
-export function checkRateLimit(key: string, limit: number, windowMs: number) {
-  const now = Date.now();
+// Login attempts by IP address
+export const loginIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "15 m"),
+  prefix: "login:ip",
+  analytics: true,
+});
 
-  const existing = requests.get(key);
+// Login attempts by email address
+export const loginEmailRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "15 m"),
+  prefix: "login:email",
+  analytics: true,
+});
 
-  if (!existing || existing.resetAt <= now) {
-    requests.set(key, {
-      count: 1,
-      resetAt: now + windowMs,
-    });
+// Registration attempts by IP address
+export const registrationIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "15 m"),
+  prefix: "register:ip",
+  analytics: true,
+});
 
-    return {
-      allowed: true,
-      remaining: limit - 1,
-      retryAfter: 0,
-    };
-  }
+// Registration attempts by email address
+export const registrationEmailRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, "15 m"),
+  prefix: "register:email",
+  analytics: true,
+});
 
-  if (existing.count >= limit) {
-    return {
-      allowed: false,
-      remaining: 0,
-      retryAfter: Math.ceil((existing.resetAt - now) / 1000),
-    };
-  }
+// Forgot password attempts by IP address
+export const forgotPasswordIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "15 m"),
+  prefix: "forgot-password:ip",
+  analytics: true,
+});
 
-  existing.count += 1;
+// Forgot password attempts by email address
+export const forgotPasswordEmailRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, "15 m"),
+  prefix: "forgot-password:email",
+  analytics: true,
+});
 
-  return {
-    allowed: true,
-    remaining: limit - existing.count,
-    retryAfter: 0,
-  };
-}
+// Password reset attempts by IP address
+export const resetPasswordIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "15 m"),
+  prefix: "reset-password:ip",
+  analytics: true,
+});
+
+// Email verification attempts by IP address
+export const verifyEmailIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, "15 m"),
+  prefix: "verify-email:ip",
+  analytics: true,
+});
+
+// Resend verification attempts by IP address
+export const resendVerificationIpRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "15 m"),
+  prefix: "resend-verification:ip",
+  analytics: true,
+});
+
+// Resend verification attempts by email address
+export const resendVerificationEmailRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(3, "15 m"),
+  prefix: "resend-verification:email",
+  analytics: true,
+});
