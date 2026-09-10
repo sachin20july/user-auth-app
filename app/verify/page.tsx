@@ -4,11 +4,11 @@
 // import { useSearchParams, useRouter } from "next/navigation";
 
 export default function VerifyOtpPage() {
-//   return (
-//     <Suspense fallback={<div>Loading...</div>}>
-//       <VerifyOtpForm />
-//     </Suspense>
-//   );
+  //   return (
+  //     <Suspense fallback={<div>Loading...</div>}>
+  //       <VerifyOtpForm />
+  //     </Suspense>
+  //   );
 }
 
 // function VerifyOtpForm() {
